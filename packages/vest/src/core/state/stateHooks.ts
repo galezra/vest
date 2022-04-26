@@ -1,13 +1,14 @@
 import asArray from 'asArray';
+import assign from 'assign';
 import createCache from 'cache';
 import type { NestedArray } from 'nestedArray';
 import * as nestedArray from 'nestedArray';
-import type { StateHandlerReturn } from 'vast';
+import optionalFunctionValue from 'optionalFunctionValue';
+import { ValueOf } from 'utilityTypes';
 
 import VestTest from 'VestTest';
-import type { StateRef } from 'createStateRef';
+import type { StateKey, StateRef, StateValue } from 'createStateRef';
 import ctx from 'ctx';
-import type { SuiteResult } from 'produceSuiteResult';
 
 // STATE REF
 export function useStateRef(): Exclude<StateRef, void> {
@@ -16,40 +17,65 @@ export function useStateRef(): Exclude<StateRef, void> {
 }
 
 // STATE KEYS
-export function useSuiteId(): string {
+export function useSuiteId(): StateValue<'suiteId'> {
   return useStateRef().suiteId()[0];
 }
-export function useSuiteName(): string | void {
+export function useSuiteName(): StateValue<'suiteName'> {
   return useStateRef().suiteName()[0];
 }
-export function useTestCallbacks(): StateHandlerReturn<{
-  fieldCallbacks: Record<string, ((res: SuiteResult) => void)[]>;
-  doneCallbacks: ((res: SuiteResult) => void)[];
-}> {
+export function useTestCallbacks(): StateKey<'testCallbacks'> {
   return useStateRef().testCallbacks();
 }
-export function useOptionalFields(): StateHandlerReturn<
-  Record<string, (() => boolean) | boolean>
-> {
+
+// OPTIONAL FIELDS
+
+function useOptionalField(
+  fieldName: string
+): ValueOf<StateValue<'optionalFields'>> {
+  const [optionalFields] = useOptionalFields();
+  return optionalFields[fieldName];
+}
+
+export function useOptionalFields(): StateKey<'optionalFields'> {
   return useStateRef().optionalFields();
 }
 
-export function useTestObjects(): StateHandlerReturn<{
-  prev: NestedArray<VestTest>;
-  current: NestedArray<VestTest>;
-}> {
+export function useSetOptionalField(
+  fieldName: string,
+  setter:
+    | ((
+        current: ValueOf<StateValue<'optionalFields'>>
+      ) => ValueOf<StateValue<'optionalFields'>>)
+    | ValueOf<StateValue<'optionalFields'>>
+): void {
+  const [, setOptionalFields] = useOptionalFields();
+  setOptionalFields(optionalFields =>
+    assign(optionalFields, {
+      [fieldName]: optionalFunctionValue(setter, optionalFields[fieldName]),
+    })
+  );
+}
+
+export function useOptionalFieldApplied(
+  fieldName: string
+): ValueOf<StateValue<'optionalFields'>>[1] {
+  return useOptionalField(fieldName)?.[1];
+}
+
+export function useOptionalFieldConfig(
+  fieldName: string
+): ValueOf<StateValue<'optionalFields'>>[0] {
+  return useOptionalField(fieldName)?.[0];
+}
+
+export function useTestObjects(): StateKey<'testObjects'> {
   return useStateRef().testObjects();
 }
 
 // STATE ACTIONS
 
 export function useRefreshTestObjects(): void {
-  const [, setTestObjects] = useTestObjects();
-
-  setTestObjects(({ current, prev }) => ({
-    prev,
-    current: asArray(current),
-  }));
+  useSetTests(tests => tests);
 }
 
 export function useSetTests(
@@ -66,13 +92,7 @@ export function useSetTests(
 // Derived state
 
 export function useAllIncomplete(): VestTest[] {
-  const [{ current }] = useTestObjects();
-
-  return nestedArray.flatten(
-    nestedArray.transform(current, testObject =>
-      testObject.isPending() ? testObject : null
-    )
-  );
+  return useTestsFlat().filter(test => test.isPending());
 }
 
 const flatCache = createCache();
