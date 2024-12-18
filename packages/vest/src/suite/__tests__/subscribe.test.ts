@@ -98,3 +98,26 @@ describe('suite.subscribe', () => {
     });
   });
 });
+
+describe('#1157 (@codrin-iftimie) suite.get() in subscribe() skips the first validation of the field', () => {
+  it('Should fail for the first field in both runs', () => {
+    const suite = vest.create(data => {
+      vest.test('a', 'Enter a value', () => {
+        enforce(data.a).isNotEmpty();
+      });
+
+      vest.test('a', 'Enter a value 2', () => {
+        enforce(data.a).isNotEmpty();
+      });
+    });
+
+    suite.subscribe(() => {
+      suite.get();
+    });
+
+    suite({ a: '' });
+    expect(suite.getErrors('a')).toEqual(['Enter a value']);
+    suite({ a: '' });
+    expect(suite.getErrors('a')).toEqual(['Enter a value']);
+  });
+});
